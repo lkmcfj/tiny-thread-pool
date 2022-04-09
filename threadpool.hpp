@@ -75,6 +75,20 @@ public:
     }
 };
 
+class TaskCollection {
+    std::vector<std::shared_ptr<Task>> tasks;
+public:
+    void add(std::shared_ptr<Task> t) {
+        tasks.push_back(std::move(t));
+    }
+    template<class F>
+    void add_callable(F f) {
+        tasks.push_back(std::make_shared<SimpleCallableTask<F>>(f));
+    }
+
+    friend class ThreadPool;
+};
+
 class ThreadPool {
 private:
     std::mutex scheduler_mutex;
@@ -96,9 +110,9 @@ public:
     ThreadPool(const ThreadPool &other) = delete;
     ThreadPool& operator=(const ThreadPool &other) = delete;
     ~ThreadPool() {
-        std::vector<std::shared_ptr<Task>> stop_all;
+        TaskCollection stop_all;
         for (size_t i = 0; i < thread_stop_signal.size(); ++i) {
-            stop_all.push_back(std::make_shared<StopRequest>());
+            stop_all.add(std::make_shared<StopRequest>());
         }
         issue_tasks(std::move(stop_all), false);
         for (auto &i : thread_stop_signal) {
@@ -123,19 +137,19 @@ public:
     }
     template<class F>
     void issue_task_callable(F func, bool wait_for_finish) {
-        std::shared_ptr<Task> task = std::make_shared<SimpleCallableTask>(func);
+        std::shared_ptr<Task> task = std::make_shared<SimpleCallableTask<F>>(func);
         issue_task(std::move(task), wait_for_finish);
     }
-    void issue_tasks(std::vector<std::shared_ptr<Task>> tasks, bool wait_for_finish) {
+    void issue_tasks(TaskCollection tasks, bool wait_for_finish) {
         {
             std::lock_guard<std::mutex> guard{scheduler_mutex};
-            for (auto &task : tasks) {
+            for (auto &task : tasks.tasks) {
                 scheduler->add(task);
             }
         }
         scheduler_signal.notify_all();
         if (wait_for_finish) {
-            for (auto &task : tasks) {
+            for (auto &task : tasks.tasks) {
                 task->finish.lock();
             }
         }
