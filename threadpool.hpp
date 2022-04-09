@@ -20,6 +20,8 @@ public:
     Task() {
         finish.lock();
     }
+    
+    virtual ~Task() {}
 
     virtual void run(thread_num_t thread_id) = 0;
     virtual bool stop_on_finished() {
@@ -57,6 +59,7 @@ public:
     virtual size_t size() = 0;
     virtual void add(std::shared_ptr<Task> task) = 0;
     virtual std::shared_ptr<Task> get() = 0;
+    virtual ~Scheduler() {}
 };
 
 class QueueScheduler : public Scheduler {
